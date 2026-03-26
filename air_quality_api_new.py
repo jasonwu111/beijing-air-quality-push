@@ -1,15 +1,19 @@
 import requests
 from datetime import datetime, timedelta
+import os
 
-AQICN_TOKEN = "e3f5c92f6396393875a96c47e0c94c136a60d2a7"
-AQICN_URL = f"https://api.waqi.info/feed/beijing/?token={AQICN_TOKEN}"
+# AQICN_TOKEN = "e3f5c92f6396393875a96c47e0c94c136a60d2a7"
+# AQICN_URL = f"https://api.waqi.info/feed/beijing/?token={AQICN_TOKEN}"
 
 
-SENDKEYS = [
-    "SCT329485T66hnPyfjKNHoPifFFuqPjJ7y"
-    "SCT329508TBq3StczVIH6VLTeg1pkppHPL",
-    "SCT329510TJicHH2eipWCDBe0Ee1gC7EiK"
-]
+# SENDKEYS = [
+#     "SCT329485T66hnPyfjKNHoPifFFuqPjJ7y"
+#     "SCT329508TBq3StczVIH6VLTeg1pkppHPL",
+#     "SCT329510TJicHH2eipWCDBe0Ee1gC7EiK"
+# ]
+
+AQICN_TOKEN = os.environ["AQICN_TOKEN"]
+SENDKEYS = [x.strip() for x in os.environ["SENDKEYS"].split(",")]
 
 
 def send_wechat(message):
