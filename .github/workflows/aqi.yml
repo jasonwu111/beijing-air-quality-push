@@ -26,3 +26,5 @@ jobs:
           AQICN_TOKEN: ${{ secrets.AQICN_TOKEN }}
           SENDKEYS: ${{ secrets.SENDKEYS }}
         run: python air_quality_api_new.py
+
+  
