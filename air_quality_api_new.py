@@ -286,11 +286,12 @@ def build_message(aqi_data: dict) -> str:
 
 
 def main():
-    aqi_data = fetch_beijing_aqi()
-    message = build_message(aqi_data)
-    result = send_wechat(message=message)
-    print("发送结果：", result)
-
+    try:
+        aqi_data = fetch_beijing_aqi()
+        message = build_message(aqi_data)
+        send_wechat(message=message)
+    except Exception as e:
+        print("运行失败:", e)
 
 if __name__ == "__main__":
     main()
