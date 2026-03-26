@@ -2,7 +2,7 @@ name: Beijing AQI Push
 
 on:
   schedule:
-    - cron: "33 14 * * *"
+    - cron: "*/5 * * * *"
   workflow_dispatch:
 
 jobs:
