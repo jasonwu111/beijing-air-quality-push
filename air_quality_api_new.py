@@ -13,6 +13,7 @@ import os
 # ]
 
 AQICN_TOKEN = os.environ["AQICN_TOKEN"]
+AQICN_URL = f"https://api.waqi.info/feed/beijing/?token={AQICN_TOKEN}"
 SENDKEYS = [x.strip() for x in os.environ["SENDKEYS"].split(",")]
 
 
