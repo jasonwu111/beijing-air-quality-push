@@ -1,31 +1,55 @@
-name: Beijing AQI Push
+name: Beijing PM2.5 Alert
 
 on:
   schedule:
-    # 北京时间每天 06:43 运行 (对应 UTC 22:43)
-    - cron: "43 22 * * *"
+    - cron: "13 21-23,0-13 * * *"
   workflow_dispatch:
 
 jobs:
-  run-script:
+  run-alert:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Python
+      - name: Compute Beijing date
+        id: bj_date
+        run: |
+          echo "date=$(TZ=Asia/Shanghai date +%F)" >> $GITHUB_OUTPUT
+
+      - name: Restore today's alert marker
+        id: alert_cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .alert_marker
+          key: beijing-pm25-alert-${{ steps.bj_date.outputs.date }}
+
+      - name: Skip because alert already sent today
+        if: steps.alert_cache.outputs.cache-hit == 'true'
+        run: echo "今天已经发送过预警，跳过。"
+
+      - name: Set up Python
+        if: steps.alert_cache.outputs.cache-hit != 'true'
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
       - name: Install dependencies
+        if: steps.alert_cache.outputs.cache-hit != 'true'
         run: pip install requests
 
-      - name: Run script
+      - name: Run alert script
+        if: steps.alert_cache.outputs.cache-hit != 'true'
         env:
           AQICN_TOKEN: ${{ secrets.AQICN_TOKEN }}
           SENDKEYS: ${{ secrets.SENDKEYS }}
+          ALERT_THRESHOLD: "125"
         run: python air_quality_api_new.py
 
-  
+      - name: Save today's alert marker
+        if: steps.alert_cache.outputs.cache-hit != 'true' && hashFiles('.alert_marker/sent.txt') != ''
+        uses: actions/cache/save@v4
+        with:
+          path: .alert_marker
+          key: beijing-pm25-alert-${{ steps.bj_date.outputs.date }}
