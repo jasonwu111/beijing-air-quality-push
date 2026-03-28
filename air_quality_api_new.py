@@ -336,7 +336,7 @@ def main():
     beijing_now = get_beijing_now()
 
     # 只在北京时间 05:00–21:59 之间运行
-    if not (5 <= beijing_now.hour < 22):
+    if not (5 <= beijing_now.hour < 23):
         print("不在推送时间范围（北京时间 05:00–21:59），跳过。")
         return
 
