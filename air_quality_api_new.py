@@ -1,38 +1,86 @@
+import os
 import requests
 from datetime import datetime, timedelta
-import os
+from zoneinfo import ZoneInfo
+
 
 # AQICN_TOKEN = "e3f5c92f6396393875a96c47e0c94c136a60d2a7"
 # AQICN_URL = f"https://api.waqi.info/feed/beijing/?token={AQICN_TOKEN}"
 
 
 # SENDKEYS = [
-#     "SCT329485T66hnPyfjKNHoPifFFuqPjJ7y"
+#     "SCT329485T66hnPyfjKNHoPifFFuqPjJ7y" -- jason
 #     "SCT329508TBq3StczVIH6VLTeg1pkppHPL",
 #     "SCT329510TJicHH2eipWCDBe0Ee1gC7EiK"
 # ]
 
 AQICN_TOKEN = os.environ["AQICN_TOKEN"]
 AQICN_URL = f"https://api.waqi.info/feed/beijing/?token={AQICN_TOKEN}"
-SENDKEYS = [x.strip() for x in os.environ["SENDKEYS"].split(",")]
+
+SENDKEYS = [x.strip() for x in os.environ["SENDKEYS"].split(",") if x.strip()]
+ALERT_THRESHOLD = int(os.environ.get("ALERT_THRESHOLD", "125"))
+ALERT_MARKER_DIR = ".alert_marker"
+ALERT_MARKER_FILE = os.path.join(ALERT_MARKER_DIR, "sent.txt")
 
 
-def send_wechat(message):
+def send_wechat(message, title):
     results = []
     for key in SENDKEYS:
         url = f"https://sctapi.ftqq.com/{key}.send"
         data = {
-            "title": "北京空气质量日报",
+            "title": title,
             "desp": message
         }
         resp = requests.post(url, data=data, timeout=20)
+        resp.raise_for_status()
         try:
-            result = resp.json()
+            results.append(resp.json())
         except Exception:
-            result = {"status_code": resp.status_code, "text": resp.text}
-        results.append(result)
+            results.append({"status_code": resp.status_code, "text": resp.text})
     return results
 
+def get_beijing_now():
+    return datetime.now(ZoneInfo("Asia/Shanghai"))
+
+
+def create_alert_marker(pm25_value: int):
+    os.makedirs(ALERT_MARKER_DIR, exist_ok=True)
+    beijing_now = get_beijing_now()
+    with open(ALERT_MARKER_FILE, "w", encoding="utf-8") as f:
+        f.write(
+            f"date={beijing_now.strftime('%Y-%m-%d')}\n"
+            f"time={beijing_now.strftime('%H:%M:%S')}\n"
+            f"pm25={pm25_value}\n"
+        )
+
+###########
+# 加一个“是否已发送”机制（用本地文件）
+ALERT_FILE = "last_alert_date.txt"
+
+def already_sent_today():
+    file_path = os.path.abspath(ALERT_FILE)
+
+    if not os.path.exists(file_path):
+        print(f"文件不存在: {file_path}")
+        return False
+
+    with open(file_path, "r") as f:
+        last_date = f.read().strip()
+
+    today = datetime.now().strftime("%Y-%m-%d")
+    print(f"文件路径: {file_path}")
+    print(f"文件中的日期: {last_date}, 今天日期: {today}")
+
+    return last_date == today
+
+def mark_sent_today():
+    today = datetime.now().strftime("%Y-%m-%d")
+    file_path = os.path.abspath(ALERT_FILE)
+    with open(file_path, "w") as f:
+        f.write(today)
+    print(f"已创建/更新文件: {file_path}")
+###########
+    
 
 def get_aqi_level_info(aqi: int) -> dict:
     if 0 <= aqi <= 50:
@@ -103,7 +151,7 @@ def get_mask_advice(pm25_aqi: int) -> str:
     elif pm25_aqi <= 150:
         return "⚠️ 敏感人群建议佩戴口罩，尤其是老人、儿童及呼吸道疾病人群。"
     elif pm25_aqi <= 200:
-        return "😷 建议佩戴口罩，并减少户外停留时间。"
+        return "⚠️ 建议佩戴口罩，并减少户外停留时间。"
     else:
         return "🚨 强烈建议佩戴口罩，并尽量避免外出。"
 
@@ -146,13 +194,13 @@ def fetch_beijing_aqi() -> dict:
     }
 
 
-def format_date_chinese(time_iso: str | None) -> str:
+def format_datetime_chinese(time_iso: str | None) -> str:
     if not time_iso:
         now = datetime.now()
-        return f"{now.year}年{now.month}月{now.day}日"
-
+        return f"{now.month}月{now.day}日 {now.hour:02d}:{now.minute:02d}"
+    
     dt = datetime.fromisoformat(time_iso)
-    return f"{dt.year}年{dt.month}月{dt.day}日"
+    return f"{dt.month}月{dt.day}日 {dt.hour:02d}:{dt.minute:02d}"
 
 
 def format_short_date(date_str: str) -> str:
@@ -226,7 +274,7 @@ def build_message(aqi_data: dict) -> str:
     pm25_aqi = aqi_data["pm25_aqi"]
     pm10_aqi = aqi_data["pm10_aqi"]
     level_info = get_aqi_level_info(pm25_aqi)
-    date_text = format_date_chinese(aqi_data.get("time_iso"))
+    date_text = format_datetime_chinese(aqi_data.get("time_iso"))
 
     temp_text = f"{aqi_data['temp']}°C" if aqi_data.get("temp") is not None else "暂无"
     humidity_text = f"{aqi_data['humidity']}%" if aqi_data.get("humidity") is not None else "暂无"
@@ -237,16 +285,15 @@ def build_message(aqi_data: dict) -> str:
     forecast_text = build_forecast_section(aqi_data)
 
     return f"""
-## {date_text} 北京空气质量日报
+### 🕒 实时监测：{date_text}
 
-{color_emoji} **今日评级：{level_info['level_cn']}（{pm25_aqi}）**
+### 🔥 PM2.5 AQI：{pm25_aqi}
 
-🔹 **PM2.5 AQI: {pm25_aqi}**
+### 🌫️ PM10 AQI：{pm10_aqi}
 
-🔹 **PM10 AQI: {pm10_aqi}**
+### 📊 今日评级：{level_info['level_cn']}{color_emoji}
 
-
-🔹 **🌡️ 温度：{temp_text} | 💧 湿度：{humidity_text} | 💨 风速：{wind_text}**
+### 🌡️ 天气：{temp_text} | 💧 {humidity_text} | 💨 {wind_text}
 
 ---------------
 
@@ -286,12 +333,29 @@ def build_message(aqi_data: dict) -> str:
 
 
 def main():
-    try:
-        aqi_data = fetch_beijing_aqi()
-        message = build_message(aqi_data)
-        send_wechat(message=message)
-    except Exception as e:
-        print("运行失败:", e)
+    beijing_now = get_beijing_now()
+
+    # 只在北京时间 05:00–21:59 之间运行
+    if not (5 <= beijing_now.hour < 22):
+        print("不在推送时间范围（北京时间 05:00–21:59），跳过。")
+        return
+
+    aqi_data = fetch_beijing_aqi()
+    pm25 = aqi_data["pm25_aqi"]
+
+    if pm25 < ALERT_THRESHOLD:
+        print(f"PM2.5={pm25}，低于阈值 {ALERT_THRESHOLD}，不发送。")
+        return
+
+    title = f"北京PM2.5偏高提醒：{pm25}，出门建议佩戴口罩!（实时）"
+    message = build_message(aqi_data)
+
+    result = send_wechat(message=message, title=title)
+    print("发送结果：", result)
+
+    create_alert_marker(pm25)
+    print(f"已创建当日预警标记：{ALERT_MARKER_FILE}")
+
 
 if __name__ == "__main__":
     main()
