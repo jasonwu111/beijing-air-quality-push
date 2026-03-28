@@ -347,7 +347,7 @@ def main():
         print(f"PM2.5={pm25}，低于阈值 {ALERT_THRESHOLD}，不发送。")
         return
 
-    title = f"北京PM2.5偏高提醒：{pm25}，出门建议佩戴口罩!（实时）"
+    title = f"PM2.5偏高提醒：{pm25}，出门请佩戴口罩!（实时）"
     message = build_message(aqi_data)
 
     result = send_wechat(message=message, title=title)
